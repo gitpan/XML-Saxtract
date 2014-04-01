@@ -1,27 +1,23 @@
-#!/usr/local/bin/perl
-
-package XML::Saxtract;
-{
-  $XML::Saxtract::VERSION = '1.00';
-}
-
-# ABSTRACT: Streaming parse XML data into a result hash based upon a specification hash
-# PODNAME: XML::Saxtract
-
 use strict;
 use warnings;
+
+package XML::Saxtract;
+$XML::Saxtract::VERSION = '1.01';
+# ABSTRACT: Streaming parse XML data into a result hash based upon a specification hash
+# PODNAME: XML::Saxtract
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(saxtract_string saxtract_url);
 
 use LWP::UserAgent;
-use XML::Sax;
+use XML::SAX;
 
 sub saxtract_string {
     my $xml_string = shift;
     my $spec       = shift;
+    my %options    = @_;
 
-    my $handler = XML::Saxtract::ContentHandler->new($spec);
+    my $handler = XML::Saxtract::ContentHandler->new( $spec, $options{object} );
     my $parser = XML::SAX::ParserFactory->parser( Handler => $handler );
     $parser->parse_string($xml_string);
 
@@ -29,27 +25,27 @@ sub saxtract_string {
 }
 
 sub saxtract_url {
-    my $uri            = shift;
-    my $spec           = shift;
-    my $die_on_failure = shift;
+    my $uri     = shift;
+    my $spec    = shift;
+    my %options = @_;
 
-    my $response = LWP::UserAgent->new()->get($uri);
+    my $agent = $options{agent} || LWP::UserAgent->new();
+
+    my $response = $agent->get($uri);
     if ( !$response->is_success() ) {
-        if ($die_on_failure) {
+        if ( $options{die_on_failure} ) {
             die($response);
         }
         else {
             return;
         }
     }
-    return saxtract_string( $response->content(), $spec );
+
+    return saxtract_string( $response->content(), $spec, %options );
 }
 
 package XML::Saxtract::ContentHandler;
-{
-  $XML::Saxtract::ContentHandler::VERSION = '1.00';
-}
-
+$XML::Saxtract::ContentHandler::VERSION = '1.01';
 use parent qw(Class::Accessor);
 __PACKAGE__->follow_best_practice;
 __PACKAGE__->mk_ro_accessors(qw(result));
@@ -157,9 +153,9 @@ sub end_element {
 }
 
 sub _init {
-    my ( $self, $spec ) = @_;
+    my ( $self, $spec, $result ) = @_;
 
-    $self->{result}        = {};
+    $self->{result} = $result || {};
     $self->{element_stack} = [
         {   spec      => $spec,
             spec_path => '',
@@ -238,7 +234,7 @@ XML::Saxtract - Streaming parse XML data into a result hash based upon a specifi
 
 =head1 VERSION
 
-version 1.00
+version 1.01
 
 =head1 SYNOPSIS
 
@@ -288,6 +284,75 @@ version 1.00
 
 This module provides methods for SAX based (streaming) parsing of XML data into
 a result hash based upon a specification hash.
+
+=head1 EXPORT_OK
+
+=head2 saxtract_string( $xml_string, $specification, [%options] )
+
+Parses the xml_string according to the specification optionally setting values
+in the result object.  If the result object is not specified, a new empty hash
+is created and a reference to it is returned.
+
+=over 4
+
+=item xml_string
+
+A string containing the xml to be parsed.
+
+=item specification
+
+A Saxtract specification hash.
+
+=item options
+
+=over 4
+
+=item object
+
+A reference to a hash to load with the results of the parsing.
+
+=back
+
+=back
+
+=head2 saxtract_url( $url, $specification, [%options] )
+
+Parses the xml_string according to the specification optionally setting values
+in the result object.  If the result object is not specified, a new empty hash
+is created and a reference to it is returned.
+
+=over 4
+
+=item url
+
+A URL used to locate the XML content.  LWP::UserAgent will be used to retrieve
+the content from this URL.
+
+=item specification
+
+A Saxtract specification hash.
+
+=item options
+
+=over 4
+
+=item object
+
+A reference to a hash to load with the results of the parsing.
+
+=item agent
+
+If specified, this agent will be used to request the XML, if not, a new
+LWP::UserAgent will be used.
+
+=item die_on_failure
+
+If true, the request will die on any http response other than 200.  $@ will be
+set to the HTTP::Response object returned by the request.
+
+=back
+
+=back
 
 =head1 AUTHOR
 
